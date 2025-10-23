@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Solar PV I-V & P-V Curve Simulator</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
+
+<style>
+  /* --- NEW COLOR SCHEME (Dark/Cyber) --- */
+  :root {
+    --bg: #1e1e2f;       /* Dark Background */
+    --card-bg: #27293d;    /* Dark Card Background */
+    --primary: #00bcd4;   /* Cyan Blue (Primary Accent) */
+    --secondary: #ff7043; /* Bright Orange (Secondary Accent) */
+    --text: #e0e0e0;      /* Light Gray Text */
+    --subtext: #a0a0a0;   /* Muted Gray Text */
+    --border: #3a3f5a;    /* Darker Border */
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Roboto", sans-serif; /* Changed Font Family */
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 60px 20px; /* Increased Padding */
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 50px; /* Increased margin */
+  }
+
+  header h1 {
+    font-size: 2.6rem; /* Slightly larger */
+    font-weight: 700;
+    color: var(--secondary); /* Used secondary color */
+  }
+
+  header p {
+    color: var(--subtext);
+    font-size: 1.1rem;
+    margin-top: 10px;
+  }
+
+  .content {
+    display: flex;
+    flex-direction: column; /* FORCED VERTICAL STACKING */
+    align-items: center;    /* CENTERED ITEMS */
+    gap: 40px;
+    width: 100%;
+    max-width: 1000px; /* Narrower overall container */
+  }
+
+  .card {
+    background: var(--card-bg);
+    border-radius: 10px; /* Sharper corners */
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3); /* Stronger, darker shadow */
+    border: 1px solid var(--border);
+    padding: 40px; /* Increased padding */
+    transition: 0.3s ease;
+    width: 100%; /* Ensure cards take full content width */
+  }
+
+  .card:hover { 
+    transform: scale(1.005); /* Different hover effect */
+    box-shadow: 0 10px 35px rgba(0, 188, 212, 0.15); /* Light hover glow */
+  }
+
+  .input-card {
+    /* Removed flex properties to work with column layout */
+    max-width: 700px; /* Max width for input panel */
+  }
+
+  .input-card h2 {
+    text-align: center;
+    font-size: 1.8rem;
+    margin-bottom: 30px;
+    color: var(--primary);
+  }
+
+  .input-group { margin-bottom: 20px; }
+  label {
+    display: block;
+    font-weight: 500; /* Slightly lighter weight */
+    margin-bottom: 8px;
+    color: var(--text);
+  }
+
+  input {
+    width: 100%;
+    padding: 14px; /* Larger input boxes */
+    border-radius: 6px; /* Sharper radius */
+    border: 1px solid var(--border);
+    background: #3a3f5a; /* Darker input background */
+    font-size: 16px;
+    color: var(--text);
+    outline: none;
+    transition: 0.3s;
+  }
+
+  input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(0, 188, 212, 0.3); /* Primary focus color */
+  }
+
+  button {
+    width: 100%;
+    margin-top: 25px;
+    /* Reversed gradient colors */
+    background: linear-gradient(90deg, var(--secondary), var(--primary)); 
+    color: white;
+    font-weight: 700;
+    padding: 16px;
+    font-size: 17px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: 0.3s;
+    letter-spacing: 0.5px; /* Added letter spacing */
+  }
+
+  button:hover { 
+    opacity: 0.95; 
+    transform: translateY(-1px); 
+    box-shadow: 0 4px 15px rgba(255,112,67,0.4);
+  }
+
+  .chart-card {
+    /* No flex properties needed due to column layout */
+    max-width: 900px; /* Wider chart card */
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Loading animation color change */
+  .chart-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 4px;
+    background: linear-gradient(90deg, transparent, var(--secondary), transparent);
+    animation: loading 2s linear infinite;
+    display: none;
+  }
+
+  .chart-card.loading::before {
+    display: block;
+  }
+
+  @keyframes loading {
+    0% { left: -100%; }
+    100% { left: 100%; }
+  }
+
+  .chart-title {
+    text-align: center;
+    font-weight: 700;
+    font-size: 1.5rem; /* Larger title */
+    color: var(--primary);
+    margin-bottom: 15px;
+  }
+
+  canvas {
+    width: 100% !important;
+    height: 380px !important; /* Slightly taller charts */
+    transition: opacity 0.3s ease;
+  }
+
+  footer {
+    margin-top: 50px;
+    font-size: 14px;
+    color: var(--subtext);
+    padding-top: 20px;
+    border-top: 1px solid var(--border); /* Added separator */
+  }
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>RK's PV Performance Curve Analyzer </h1> </header>
+
+<div class="content">
+  <div class="card input-card">
+    <h2>Input Cell Parameters</h2> <div class="input-group">
+      <label for="voc">Open Circuit Voltage (Voc) [V]</label>
+      <input type="number" id="voc" value="24" />
+    </div>
+    <div class="input-group">
+      <label for="isc">Short Circuit Current (Isc) [A]</label>
+      <input type="number" id="isc" value="2.3" />
+    </div>
+    <div class="input-group">
+      <label for="vmpp">Voltage at MPP (Vmpp) [V]</label>
+      <input type="number" id="vmpp" value="17.0" />
+    </div>
+    <div class="input-group">
+      <label for="impp">Current at MPP (Impp) [A]</label>
+      <input type="number" id="impp" value="2.9" />
+    </div>
+    <div class="input-group">
+      <label for="ff">Fill Factor (FF)</label>
+      <input type="number" id="ff" value="0.78" step="0.01" />
+    </div>
+    <div class="input-group">
+      <label for="irradiance">Irradiance (G) [W/m²]</label>
+      <input type="number" id="irradiance" value="1100" />
+    </div>
+    <div class="input-group">
+      <label for="temp">Temperature [°C]</label>
+      <input type="number" id="temp" value="23" />
+    </div>
+
+    <button onclick="plotGraph()">Run Simulation & Plot Curves</button> </div>
+
+  <div class="card chart-card">
+    <h3 class="chart-title">Current-Voltage (I-V) Curve</h3> <canvas id="ivChart"></canvas>
+    <h3 class="chart-title" style="margin-top:40px;">Power-Voltage (P-V) Curve</h3> <canvas id="pvChart"></canvas>
+  </div>
+</div>
+
+
+<script>
+let ivChart, pvChart;
+
+function plotGraph() {
+  // --- Read inputs ---
+  const Voc_ref = parseFloat(document.getElementById("voc").value);
+  const Isc_ref = parseFloat(document.getElementById("isc").value);
+  const Vmpp_ref = parseFloat(document.getElementById("vmpp").value);
+  const Impp_ref = parseFloat(document.getElementById("impp").value);
+  const FF = parseFloat(document.getElementById("ff").value);
+  const G = parseFloat(document.getElementById("irradiance").value);
+  const T = parseFloat(document.getElementById("temp").value);
+
+  // --- Standard test conditions (STC) ---
+  const G_ref = 1000;   // W/m²
+  const T_ref = 25;     // °C
+  const alpha_Isc = 0.0005;   // A/°C (typical 0.05%/°C)
+  const beta_Voc = -0.0023;   // V/°C (typical -0.23%/°C per °C)
+
+  // --- Recalculate Voc & Isc for given conditions ---
+  const Voc = Voc_ref + Voc_ref * beta_Voc * (T - T_ref);
+  const Isc = Isc_ref * (G / G_ref) * (1 + alpha_Isc * (T - T_ref));
+
+  // --- Recalculate Vmpp & Impp approximately ---
+  const Vmpp = Voc * 0.8;
+  const Impp = Isc * 0.95;
+
+  // --- Generate I-V and P-V data ---
+  const nPoints = 100;
+  const V = [], I = [], P = [];
+
+  for (let i = 0; i <= nPoints; i++) {
+    const v = (Voc / nPoints) * i;
+    let current;
+
+    if (v < Vmpp) current = Isc - (Isc - Impp) * (v / Vmpp);
+    else current = Impp * Math.pow(1 - ((v - Vmpp) / (Voc - Vmpp)), 1.2);
+
+    if (current < 0) current = 0;
+    V.push(v.toFixed(2));
+    I.push(current);
+    P.push(v * current);
+  }
+
+  // --- Destroy old charts if exist ---
+  if (ivChart) ivChart.destroy();
+  if (pvChart) pvChart.destroy();
+
+  // Common animation configuration
+  const commonOptions = {
+    responsive: true,
+    animation: {
+      duration: 2000,
+      easing: 'easeInOutQuart',
+    },
+    transitions: {
+      show: {
+        animations: {
+          x: { from: 0 },
+          y: { from: 0 }
+        }
+      }
+    },
+    plugins: {
+      legend: {
+        labels: { 
+          color: "#e0e0e0", /* Changed label color for dark theme */
+          font: { size: 14 }
+        }
+      }
+    },
+    interaction: {
+      intersect: false,
+      mode: 'index'
+    },
+    elements: {
+      line: {
+        tension: 0.4
+      }
+    }
+  };
+
+  // --- I-V Chart ---
+  const ctx1 = document.getElementById("ivChart").getContext("2d");
+  ivChart = new Chart(ctx1, {
+    type: "line",
+    data: {
+      labels: V,
+      datasets: [{
+        label: "I-V Curve",
+        borderColor: "#00bcd4", /* Used primary color */
+        data: I,
+        backgroundColor: "rgba(0, 188, 212, 0.2)",
+        fill: true,
+        borderWidth: 3,
+        pointRadius: 0,
+        pointHoverRadius: 6,
+        pointHoverBackgroundColor: "#00bcd4"
+      }]
+    },
+    options: {
+      ...commonOptions,
+      scales: {
+        x: {
+          title: { 
+            display: true, 
+            text: "Voltage (V)",
+            font: { size: 14, weight: 'bold' },
+            color: "#a0a0a0" /* Axis label color */
+          },
+          grid: { color: "#3a3f5a" } /* Darker grid lines */
+        },
+        y: {
+          title: { 
+            display: true, 
+            text: "Current (A)",
+            font: { size: 14, weight: 'bold' },
+            color: "#a0a0a0" /* Axis label color */
+          },
+          grid: { color: "#3a3f5a" } /* Darker grid lines */
+        }
+      }
+    }
+  });
+
+  // --- P-V Chart ---
+  const ctx2 = document.getElementById("pvChart").getContext("2d");
+  pvChart = new Chart(ctx2, {
+    type: "line",
+    data: {
+      labels: V,
+      datasets: [{
+        label: "P-V Curve",
+        data: P,
+        borderColor: "#ff7043", /* Used secondary color */
+        backgroundColor: "rgba(255, 112, 67, 0.2)",
+        fill: true,
+        borderWidth: 3,
+        pointRadius: 0,
+        pointHoverRadius: 6,
+        pointHoverBackgroundColor: "#ff7043"
+      }]
+    },
+    options: {
+      ...commonOptions,
+      scales: {
+        x: {
+          title: { 
+            display: true, 
+            text: "Voltage (V)",
+            font: { size: 14, weight: 'bold' },
+            color: "#a0a0a0" /* Axis label color */
+          },
+          grid: { color: "#3a3f5a" } /* Darker grid lines */
+        },
+        y: {
+          title: { 
+            display: true, 
+            text: "Power (W)",
+            font: { size: 14, weight: 'bold' },
+            color: "#a0a0a0" /* Axis label color */
+          },
+          grid: { color: "#3a3f5a" } /* Darker grid lines */
+        }
+      }
+    }
+  });
+}
+
+// Add loading animation to button
+const generateButton = document.querySelector('button');
+generateButton.addEventListener('click', function() {
+  this.style.transform = 'scale(0.98)';
+  setTimeout(() => this.style.transform = 'translateY(-1px)', 200);
+});
+
+window.onload = plotGraph;
+</script>
+
+</body>
+</html>
